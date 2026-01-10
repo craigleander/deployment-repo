@@ -54,10 +54,6 @@ pipeline {
                         export AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
                         export AWS_DEFAULT_REGION="us-east-1"
                         
-                        # Verify AWS credentials
-                        echo "Verifying AWS credentials..."
-                        aws sts get-caller-identity || echo "Warning: AWS CLI not available, but credentials are set"
-                        
                         # Check if env/dev.tfvars exists
                         if [ ! -f "env/dev.tfvars" ]; then
                             echo "ERROR: env/dev.tfvars file not found!"
@@ -69,6 +65,7 @@ pipeline {
                             exit 1
                         fi
                         
+                        echo "AWS credentials configured via environment variables"
                         echo "Initializing Terraform..."
                         terraform init
                     '''
