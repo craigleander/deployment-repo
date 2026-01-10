@@ -32,8 +32,16 @@ pipeline {
                     mkdir -p ~/bin
                     export PATH="$HOME/bin:$PATH"
                     
-                    # Check if Terraform is actually working (not just if command exists)
-                    if terraform version &> /dev/null; then
+                    # Check if Terraform exists and works
+                    TERRAFORM_INSTALLED=false
+                    if command -v terraform >/dev/null 2>&1; then
+                        # Command exists, try to run it
+                        if terraform version >/dev/null 2>&1; then
+                            TERRAFORM_INSTALLED=true
+                        fi
+                    fi
+                    
+                    if [ "$TERRAFORM_INSTALLED" = "true" ]; then
                         echo "Terraform is already installed:"
                         terraform version
                     else
@@ -77,14 +85,14 @@ pipeline {
                         chmod +x ~/bin/terraform
                         
                         # Verify installation by actually running terraform
-                        if terraform version &> /dev/null; then
+                        if [ -f ~/bin/terraform ] && ~/bin/terraform version >/dev/null 2>&1; then
                             echo "✓ Terraform installed successfully:"
                             terraform version
                         else
                             echo "✗ ERROR: Terraform installation failed - terraform not working"
                             echo "PATH: $PATH"
                             ls -la ~/bin/ || echo "~/bin directory not found"
-                            which terraform || echo "terraform not found in PATH"
+                            command -v terraform || echo "terraform not found in PATH"
                             exit 1
                         fi
                         
