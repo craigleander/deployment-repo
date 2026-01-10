@@ -53,6 +53,23 @@ pipeline {
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
                         export AWS_DEFAULT_REGION="us-east-1"
+                        
+                        # Verify AWS credentials
+                        echo "Verifying AWS credentials..."
+                        aws sts get-caller-identity || echo "Warning: AWS CLI not available, but credentials are set"
+                        
+                        # Check if env/dev.tfvars exists
+                        if [ ! -f "env/dev.tfvars" ]; then
+                            echo "ERROR: env/dev.tfvars file not found!"
+                            echo "Current directory: $(pwd)"
+                            echo "Files in current directory:"
+                            ls -la
+                            echo "Files in env directory:"
+                            ls -la env/ || echo "env directory does not exist"
+                            exit 1
+                        fi
+                        
+                        echo "Initializing Terraform..."
                         terraform init
                     '''
                 }
