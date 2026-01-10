@@ -1,6 +1,10 @@
 pipeline {
     agent any
     
+    tools {
+        terraform 'terraform-1.6'
+    }
+    
     environment {
         AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
         AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
@@ -24,191 +28,6 @@ pipeline {
             }
         }
         
-        stage('Install Terraform') {
-            steps {
-                echo 'Installing Terraform...'
-                sh '''
-                    # Set up PATH first
-                    mkdir -p ~/bin
-                    export PATH="$HOME/bin:$PATH"
-                    
-                    # Check if Terraform exists and works
-                    TERRAFORM_INSTALLED=false
-                    if command -v terraform >/dev/null 2>&1; then
-                        # Command exists, try to run it
-                        if terraform version >/dev/null 2>&1; then
-                            TERRAFORM_INSTALLED=true
-                        fi
-                    fi
-                    
-                    if [ "$TERRAFORM_INSTALLED" = "true" ]; then
-                        echo "Terraform is already installed:"
-                        terraform version
-                    else
-                        echo "Terraform not found or not working. Installing Terraform..."
-                        
-                        # Check if wget or curl is already available
-                        DOWNLOAD_TOOL=""
-                        if command -v wget >/dev/null 2>&1; then
-                            DOWNLOAD_TOOL="wget"
-                        elif command -v curl >/dev/null 2>&1; then
-                            DOWNLOAD_TOOL="curl"
-                        fi
-                        
-                        # If neither is available, try to install them (but don't fail if we can't)
-                        if [ -z "$DOWNLOAD_TOOL" ]; then
-                            echo "wget/curl not found. Attempting to install..."
-                            if command -v apt-get >/dev/null 2>&1; then
-                                if command -v sudo >/dev/null 2>&1; then
-                                    sudo apt-get update -qq && sudo apt-get install -y -qq wget unzip curl || true
-                                else
-                                    apt-get update -qq && apt-get install -y -qq wget unzip curl 2>/dev/null || true
-                                fi
-                            elif command -v yum >/dev/null 2>&1; then
-                                if command -v sudo >/dev/null 2>&1; then
-                                    sudo yum install -y -q wget unzip curl || true
-                                else
-                                    yum install -y -q wget unzip curl 2>/dev/null || true
-                                fi
-                            fi
-                            
-                            # Check again after installation attempt
-                            if command -v wget >/dev/null 2>&1; then
-                                DOWNLOAD_TOOL="wget"
-                            elif command -v curl >/dev/null 2>&1; then
-                                DOWNLOAD_TOOL="curl"
-                            fi
-                        fi
-                        
-                        # Check if we have a download tool, try Python as fallback
-                        if [ -z "$DOWNLOAD_TOOL" ]; then
-                            if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
-                                DOWNLOAD_TOOL="python"
-                                echo "Using Python to download Terraform..."
-                            else
-                                echo "ERROR: Neither wget, curl, nor Python is available. Cannot download Terraform."
-                                echo "Please ensure the Jenkins agent has wget, curl, or Python installed."
-                                exit 1
-                            fi
-                        else
-                            echo "Using $DOWNLOAD_TOOL to download Terraform..."
-                        fi
-                        
-                        # Check if unzip is available, with Python fallback
-                        EXTRACT_TOOL=""
-                        if command -v unzip >/dev/null 2>&1; then
-                            EXTRACT_TOOL="unzip"
-                        else
-                            echo "unzip not found. Attempting to install..."
-                            if command -v apt-get >/dev/null 2>&1; then
-                                if command -v sudo >/dev/null 2>&1; then
-                                    sudo apt-get update -qq && sudo apt-get install -y -qq unzip || true
-                                else
-                                    apt-get update -qq && apt-get install -y -qq unzip 2>/dev/null || true
-                                fi
-                            elif command -v yum >/dev/null 2>&1; then
-                                if command -v sudo >/dev/null 2>&1; then
-                                    sudo yum install -y -q unzip || true
-                                else
-                                    yum install -y -q unzip 2>/dev/null || true
-                                fi
-                            fi
-                            
-                            # Check again after installation attempt
-                            if command -v unzip >/dev/null 2>&1; then
-                                EXTRACT_TOOL="unzip"
-                            fi
-                        fi
-                        
-                        # If unzip is still not available, try Python as fallback
-                        if [ -z "$EXTRACT_TOOL" ]; then
-                            if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
-                                EXTRACT_TOOL="python"
-                                echo "Using Python to extract Terraform..."
-                            else
-                                echo "ERROR: Neither unzip nor Python is available. Cannot extract Terraform."
-                                exit 1
-                            fi
-                        fi
-                        
-                        # Set Terraform version (adjust as needed)
-                        TERRAFORM_VERSION="1.6.0"
-                        TERRAFORM_ZIP="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-                        
-                        # Download Terraform
-                        if [ "$DOWNLOAD_TOOL" = "wget" ]; then
-                            wget -q "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${TERRAFORM_ZIP}" -O /tmp/${TERRAFORM_ZIP}
-                        elif [ "$DOWNLOAD_TOOL" = "curl" ]; then
-                            curl -s -L "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${TERRAFORM_ZIP}" -o /tmp/${TERRAFORM_ZIP}
-                        elif [ "$DOWNLOAD_TOOL" = "python" ]; then
-                            # Use Python to download
-                            PYTHON_CMD="python3"
-                            if ! command -v python3 >/dev/null 2>&1; then
-                                PYTHON_CMD="python"
-                            fi
-                            $PYTHON_CMD -c "
-import urllib.request
-import sys
-try:
-    urllib.request.urlretrieve('https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${TERRAFORM_ZIP}', '/tmp/${TERRAFORM_ZIP}')
-except Exception as e:
-    print(f'Download failed: {e}', file=sys.stderr)
-    sys.exit(1)
-"
-                        fi
-                        
-                        # Check if download was successful
-                        if [ ! -f /tmp/${TERRAFORM_ZIP} ]; then
-                            echo "ERROR: Failed to download Terraform"
-                            exit 1
-                        fi
-                        
-                        # Extract and install to user directory
-                        if [ "$EXTRACT_TOOL" = "unzip" ]; then
-                            unzip -q /tmp/${TERRAFORM_ZIP} -d ~/bin/
-                        elif [ "$EXTRACT_TOOL" = "python" ]; then
-                            # Use Python to extract
-                            PYTHON_CMD="python3"
-                            if ! command -v python3 >/dev/null 2>&1; then
-                                PYTHON_CMD="python"
-                            fi
-                            $PYTHON_CMD -c "
-import zipfile
-import os
-import sys
-
-try:
-    os.makedirs(os.path.expanduser('~/bin'), exist_ok=True)
-    with zipfile.ZipFile('/tmp/${TERRAFORM_ZIP}', 'r') as zip_ref:
-        zip_ref.extractall(os.path.expanduser('~/bin'))
-except Exception as e:
-    print(f'Extraction failed: {e}', file=sys.stderr)
-    sys.exit(1)
-"
-                        fi
-                        
-                        # Make executable
-                        chmod +x ~/bin/terraform
-                        
-                        # Verify installation by actually running terraform
-                        if [ -f ~/bin/terraform ] && ~/bin/terraform version >/dev/null 2>&1; then
-                            echo "✓ Terraform installed successfully:"
-                            terraform version
-                        else
-                            echo "✗ ERROR: Terraform installation failed - terraform not working"
-                            echo "PATH: $PATH"
-                            ls -la ~/bin/ || echo "~/bin directory not found"
-                            command -v terraform || echo "terraform not found in PATH"
-                            exit 1
-                        fi
-                        
-                        # Cleanup
-                        rm -f /tmp/${TERRAFORM_ZIP}
-                    fi
-                '''
-            }
-        }
-        
         stage('Terraform Init') {
             steps {
                 echo 'Initializing Terraform...'
@@ -218,7 +37,6 @@ except Exception as e:
                     string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
                 ]) {
                     sh '''
-                        export PATH="$HOME/bin:$PATH"
                         export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
@@ -252,7 +70,6 @@ except Exception as e:
                     string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
                 ]) {
                     sh '''
-                        export PATH="$HOME/bin:$PATH"
                         export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
@@ -272,7 +89,6 @@ except Exception as e:
                     string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
                 ]) {
                     sh '''
-                        export PATH="$HOME/bin:$PATH"
                         export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
