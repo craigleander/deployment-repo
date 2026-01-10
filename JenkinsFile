@@ -24,17 +24,71 @@ pipeline {
             }
         }
         
-        stage('Verify Terraform') {
+        stage('Install Terraform') {
             steps {
-                echo 'Verifying Terraform installation...'
+                echo 'Installing Terraform...'
                 sh '''
-                    # Check if Terraform is installed
+                    # Check if Terraform is already installed
                     if command -v terraform &> /dev/null; then
-                        echo "✓ Terraform is installed:"
+                        echo "Terraform is already installed:"
                         terraform version
                     else
-                        echo "✗ ERROR: Terraform is not installed or not in PATH"
-                        exit 1
+                        echo "Terraform not found. Installing Terraform..."
+                        
+                        # Create local bin directory
+                        mkdir -p ~/bin
+                        export PATH="$HOME/bin:$PATH"
+                        
+                        # Try to install dependencies (may require sudo or may not be needed)
+                        if command -v apt-get &> /dev/null; then
+                            sudo apt-get update -qq || apt-get update -qq || true
+                            sudo apt-get install -y -qq wget unzip curl || apt-get install -y -qq wget unzip curl || true
+                        elif command -v yum &> /dev/null; then
+                            sudo yum install -y -q wget unzip curl || yum install -y -q wget unzip curl || true
+                        fi
+                        
+                        # Check if wget or curl is available
+                        if ! command -v wget &> /dev/null && ! command -v curl &> /dev/null; then
+                            echo "ERROR: Neither wget nor curl is available. Cannot download Terraform."
+                            exit 1
+                        fi
+                        
+                        # Set Terraform version (adjust as needed)
+                        TERRAFORM_VERSION="1.6.0"
+                        TERRAFORM_ZIP="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+                        
+                        # Download Terraform
+                        if command -v wget &> /dev/null; then
+                            wget -q "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${TERRAFORM_ZIP}" -O /tmp/${TERRAFORM_ZIP}
+                        else
+                            curl -s -L "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${TERRAFORM_ZIP}" -o /tmp/${TERRAFORM_ZIP}
+                        fi
+                        
+                        # Check if download was successful
+                        if [ ! -f /tmp/${TERRAFORM_ZIP} ]; then
+                            echo "ERROR: Failed to download Terraform"
+                            exit 1
+                        fi
+                        
+                        # Unzip and install to user directory
+                        unzip -q /tmp/${TERRAFORM_ZIP} -d ~/bin/
+                        
+                        # Make executable
+                        chmod +x ~/bin/terraform
+                        
+                        # Verify installation
+                        if command -v terraform &> /dev/null; then
+                            echo "✓ Terraform installed successfully:"
+                            terraform version
+                        else
+                            echo "✗ ERROR: Terraform installation failed - terraform not found in PATH"
+                            echo "PATH: $PATH"
+                            ls -la ~/bin/ || echo "~/bin directory not found"
+                            exit 1
+                        fi
+                        
+                        # Cleanup
+                        rm -f /tmp/${TERRAFORM_ZIP}
                     fi
                 '''
             }
@@ -49,6 +103,7 @@ pipeline {
                     string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
                 ]) {
                     sh '''
+                        export PATH="$HOME/bin:$PATH"
                         export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
@@ -82,6 +137,7 @@ pipeline {
                     string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
                 ]) {
                     sh '''
+                        export PATH="$HOME/bin:$PATH"
                         export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
@@ -101,6 +157,7 @@ pipeline {
                     string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
                 ]) {
                     sh '''
+                        export PATH="$HOME/bin:$PATH"
                         export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
@@ -121,7 +178,7 @@ pipeline {
         }
         always {
             echo 'Cleaning up workspace...'
-            cleanWs()
+            deleteDir()
         }
     }
 }
