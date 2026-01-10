@@ -1,0 +1,80 @@
+pipeline {
+    agent any
+    
+    environment {
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_SESSION_TOKEN = credentials('aws-session-token')
+        AWS_DEFAULT_REGION = 'us-east-1'
+        GIT_REPO = 'https://github.com/craigleander/deployment-repo.git'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out code from GitHub repository...'
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: env.GIT_REPO,
+                        credentialsId: 'github-credentials'
+                    ]]
+                ])
+            }
+        }
+        
+        stage('Verify Terraform') {
+            steps {
+                echo 'Verifying Terraform installation...'
+                sh '''
+                    terraform version
+                    if [ $? -ne 0 ]; then
+                        echo "ERROR: Terraform is not installed or not in PATH"
+                        exit 1
+                    fi
+                '''
+            }
+        }
+        
+        stage('Terraform Init') {
+            steps {
+                echo 'Initializing Terraform...'
+                sh '''
+                    terraform init
+                '''
+            }
+        }
+        
+        stage('Terraform Plan') {
+            steps {
+                echo 'Running Terraform plan...'
+                sh '''
+                    terraform plan -var-file=env/dev.tfvars
+                '''
+            }
+        }
+        
+        stage('Terraform Apply') {
+            steps {
+                echo 'Applying Terraform configuration...'
+                sh '''
+                    terraform apply -var-file=env/dev.tfvars -auto-approve
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Terraform deployment completed successfully!'
+        }
+        failure {
+            echo 'Terraform deployment failed. Check logs for details.'
+        }
+        always {
+            echo 'Cleaning up workspace...'
+            cleanWs()
+        }
+    }
+}
