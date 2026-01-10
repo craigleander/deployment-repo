@@ -28,16 +28,16 @@ pipeline {
             steps {
                 echo 'Installing Terraform...'
                 sh '''
-                    # Check if Terraform is already installed
-                    if command -v terraform &> /dev/null; then
+                    # Set up PATH first
+                    mkdir -p ~/bin
+                    export PATH="$HOME/bin:$PATH"
+                    
+                    # Check if Terraform is actually working (not just if command exists)
+                    if terraform version &> /dev/null; then
                         echo "Terraform is already installed:"
                         terraform version
                     else
-                        echo "Terraform not found. Installing Terraform..."
-                        
-                        # Create local bin directory
-                        mkdir -p ~/bin
-                        export PATH="$HOME/bin:$PATH"
+                        echo "Terraform not found or not working. Installing Terraform..."
                         
                         # Try to install dependencies (may require sudo or may not be needed)
                         if command -v apt-get &> /dev/null; then
@@ -76,14 +76,15 @@ pipeline {
                         # Make executable
                         chmod +x ~/bin/terraform
                         
-                        # Verify installation
-                        if command -v terraform &> /dev/null; then
+                        # Verify installation by actually running terraform
+                        if terraform version &> /dev/null; then
                             echo "✓ Terraform installed successfully:"
                             terraform version
                         else
-                            echo "✗ ERROR: Terraform installation failed - terraform not found in PATH"
+                            echo "✗ ERROR: Terraform installation failed - terraform not working"
                             echo "PATH: $PATH"
                             ls -la ~/bin/ || echo "~/bin directory not found"
+                            which terraform || echo "terraform not found in PATH"
                             exit 1
                         fi
                         
