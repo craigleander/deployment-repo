@@ -33,21 +33,26 @@ pipeline {
         stage('Notify Deployment Start') {
             steps {
                 echo 'Notifying drifts API: Deployment started...'
-                sh '''
-                    curl -X POST "${DRIFTS_API_URL}" \
-                        -H "Content-Type: application/json" \
-                        -d '{
-                            "appStack": "'"${APPSTACK_NAME}"'",
-                            "runStatus": "running"
-                        }' \
-                        -w "\nHTTP Status: %{http_code}\n" \
-                        -s -o /tmp/drifts_response.json
-                    
-                    if [ -f /tmp/drifts_response.json ]; then
-                        echo "Drifts API response:"
-                        cat /tmp/drifts_response.json
-                    fi
-                '''
+                script {
+                    def apiUrl = env.DRIFTS_API_URL
+                    def appStack = env.APPSTACK_NAME
+                    echo "API URL: ${apiUrl}"
+                    echo "AppStack: ${appStack}"
+                    def response = sh(
+                        script: """
+                            curl -X POST '${apiUrl}' \
+                                -H 'Content-Type: application/json' \
+                                -d '{
+                                    \"appStack\": \"${appStack}\",
+                                    \"runStatus\": \"running\"
+                                }' \
+                                -w \"\\nHTTP Status: %{http_code}\\n\" \
+                                -f -v
+                        """,
+                        returnStdout: true
+                    )
+                    echo "API Response: ${response}"
+                }
             }
         }
         
@@ -106,21 +111,26 @@ pipeline {
         stage('Notify Plan Complete') {
             steps {
                 echo 'Notifying drifts API: Terraform plan completed...'
-                sh '''
-                    curl -X POST "${DRIFTS_API_URL}" \
-                        -H "Content-Type: application/json" \
-                        -d '{
-                            "appStack": "'"${APPSTACK_NAME}"'",
-                            "runStatus": "completed"
-                        }' \
-                        -w "\nHTTP Status: %{http_code}\n" \
-                        -s -o /tmp/drifts_response.json
-                    
-                    if [ -f /tmp/drifts_response.json ]; then
-                        echo "Drifts API response:"
-                        cat /tmp/drifts_response.json
-                    fi
-                '''
+                script {
+                    def apiUrl = env.DRIFTS_API_URL
+                    def appStack = env.APPSTACK_NAME
+                    echo "API URL: ${apiUrl}"
+                    echo "AppStack: ${appStack}"
+                    def response = sh(
+                        script: """
+                            curl -X POST '${apiUrl}' \
+                                -H 'Content-Type: application/json' \
+                                -d '{
+                                    \"appStack\": \"${appStack}\",
+                                    \"runStatus\": \"completed\"
+                                }' \
+                                -w \"\\nHTTP Status: %{http_code}\\n\" \
+                                -f -v
+                        """,
+                        returnStdout: true
+                    )
+                    echo "API Response: ${response}"
+                }
             }
         }
         
@@ -152,21 +162,27 @@ pipeline {
             echo 'Terraform deployment failed. Check logs for details.'
             script {
                 // Update status to failed if deployment fails
-                sh '''
-                    curl -X POST "${DRIFTS_API_URL}" \
-                        -H "Content-Type: application/json" \
-                        -d '{
-                            "appStack": "'"${APPSTACK_NAME}"'",
-                            "runStatus": "failed"
-                        }' \
-                        -w "\nHTTP Status: %{http_code}\n" \
-                        -s -o /tmp/drifts_response.json || echo "Failed to update drifts API"
-                    
-                    if [ -f /tmp/drifts_response.json ]; then
-                        echo "Drifts API response:"
-                        cat /tmp/drifts_response.json
-                    fi
-                '''
+                try {
+                    def apiUrl = env.DRIFTS_API_URL
+                    def appStack = env.APPSTACK_NAME
+                    echo "Updating drifts API: AppStack=${appStack}, Status=failed"
+                    def response = sh(
+                        script: """
+                            curl -X POST '${apiUrl}' \
+                                -H 'Content-Type: application/json' \
+                                -d '{
+                                    \"appStack\": \"${appStack}\",
+                                    \"runStatus\": \"failed\"
+                                }' \
+                                -w \"\\nHTTP Status: %{http_code}\\n\" \
+                                -f -v
+                        """,
+                        returnStdout: true
+                    )
+                    echo "API Response: ${response}"
+                } catch (Exception e) {
+                    echo "Failed to update drifts API: ${e.getMessage()}"
+                }
             }
         }
         always {
