@@ -33,20 +33,21 @@ pipeline {
         stage('Notify Deployment Start') {
             steps {
                 echo 'Notifying drifts API: Deployment started...'
-                script {
-                    def response = httpRequest(
-                        httpMode: 'POST',
-                        url: "${env.DRIFTS_API_URL}",
-                        contentType: 'APPLICATION_JSON',
-                        requestBody: """
-                        {
-                            "appStack": "${env.APPSTACK_NAME}",
+                sh '''
+                    curl -X POST "${DRIFTS_API_URL}" \
+                        -H "Content-Type: application/json" \
+                        -d '{
+                            "appStack": "'"${APPSTACK_NAME}"'",
                             "runStatus": "running"
-                        }
-                        """
-                    )
-                    echo "Drifts API response: ${response.content}"
-                }
+                        }' \
+                        -w "\nHTTP Status: %{http_code}\n" \
+                        -s -o /tmp/drifts_response.json
+                    
+                    if [ -f /tmp/drifts_response.json ]; then
+                        echo "Drifts API response:"
+                        cat /tmp/drifts_response.json
+                    fi
+                '''
             }
         }
         
@@ -105,20 +106,21 @@ pipeline {
         stage('Notify Plan Complete') {
             steps {
                 echo 'Notifying drifts API: Terraform plan completed...'
-                script {
-                    def response = httpRequest(
-                        httpMode: 'POST',
-                        url: "${env.DRIFTS_API_URL}",
-                        contentType: 'APPLICATION_JSON',
-                        requestBody: """
-                        {
-                            "appStack": "${env.APPSTACK_NAME}",
+                sh '''
+                    curl -X POST "${DRIFTS_API_URL}" \
+                        -H "Content-Type: application/json" \
+                        -d '{
+                            "appStack": "'"${APPSTACK_NAME}"'",
                             "runStatus": "completed"
-                        }
-                        """
-                    )
-                    echo "Drifts API response: ${response.content}"
-                }
+                        }' \
+                        -w "\nHTTP Status: %{http_code}\n" \
+                        -s -o /tmp/drifts_response.json
+                    
+                    if [ -f /tmp/drifts_response.json ]; then
+                        echo "Drifts API response:"
+                        cat /tmp/drifts_response.json
+                    fi
+                '''
             }
         }
         
@@ -150,21 +152,21 @@ pipeline {
             echo 'Terraform deployment failed. Check logs for details.'
             script {
                 // Update status to failed if deployment fails
-                try {
-                    httpRequest(
-                        httpMode: 'POST',
-                        url: "${env.DRIFTS_API_URL}",
-                        contentType: 'APPLICATION_JSON',
-                        requestBody: """
-                        {
-                            "appStack": "${env.APPSTACK_NAME}",
+                sh '''
+                    curl -X POST "${DRIFTS_API_URL}" \
+                        -H "Content-Type: application/json" \
+                        -d '{
+                            "appStack": "'"${APPSTACK_NAME}"'",
                             "runStatus": "failed"
-                        }
-                        """
-                    )
-                } catch (Exception e) {
-                    echo "Failed to update drifts API: ${e.getMessage()}"
-                }
+                        }' \
+                        -w "\nHTTP Status: %{http_code}\n" \
+                        -s -o /tmp/drifts_response.json || echo "Failed to update drifts API"
+                    
+                    if [ -f /tmp/drifts_response.json ]; then
+                        echo "Drifts API response:"
+                        cat /tmp/drifts_response.json
+                    fi
+                '''
             }
         }
         always {
