@@ -88,7 +88,7 @@ elasticache_parameters = [
 ]
 
 # MSK Variables
-msk_cluster_name                        = "dev-msk-cluster"
+msk_cluster_name = "us-eks-cluster-deployment"
 msk_kafka_version                       = "3.5.1"
 msk_number_of_broker_nodes              = 3
 msk_enhanced_monitoring                 = "PER_TOPIC_PER_PARTITION"
