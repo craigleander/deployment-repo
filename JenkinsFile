@@ -11,6 +11,8 @@ pipeline {
         AWS_SESSION_TOKEN = credentials('aws-session-token')
         AWS_DEFAULT_REGION = 'us-east-1'
         GIT_REPO = 'https://github.com/craigleander/deployment-repo.git'
+        DRIFTS_API_URL = 'http://stackgen.34.170.32.248.nip.io/platform/drifts'
+        APPSTACK_NAME = 'Cluster-Deployment'
     }
     
     stages {
@@ -25,6 +27,26 @@ pipeline {
                         credentialsId: 'github-credentials'
                     ]]
                 ])
+            }
+        }
+        
+        stage('Notify Deployment Start') {
+            steps {
+                echo 'Notifying drifts API: Deployment started...'
+                script {
+                    def response = httpRequest(
+                        httpMode: 'POST',
+                        url: "${env.DRIFTS_API_URL}",
+                        contentType: 'APPLICATION_JSON',
+                        requestBody: """
+                        {
+                            "appStack": "${env.APPSTACK_NAME}",
+                            "runStatus": "running"
+                        }
+                        """
+                    )
+                    echo "Drifts API response: ${response.content}"
+                }
             }
         }
         
@@ -80,6 +102,26 @@ pipeline {
             }
         }
         
+        stage('Notify Plan Complete') {
+            steps {
+                echo 'Notifying drifts API: Terraform plan completed...'
+                script {
+                    def response = httpRequest(
+                        httpMode: 'POST',
+                        url: "${env.DRIFTS_API_URL}",
+                        contentType: 'APPLICATION_JSON',
+                        requestBody: """
+                        {
+                            "appStack": "${env.APPSTACK_NAME}",
+                            "runStatus": "completed"
+                        }
+                        """
+                    )
+                    echo "Drifts API response: ${response.content}"
+                }
+            }
+        }
+        
         stage('Terraform Apply') {
             steps {
                 echo 'Applying Terraform configuration...'
@@ -106,6 +148,24 @@ pipeline {
         }
         failure {
             echo 'Terraform deployment failed. Check logs for details.'
+            script {
+                // Update status to failed if deployment fails
+                try {
+                    httpRequest(
+                        httpMode: 'POST',
+                        url: "${env.DRIFTS_API_URL}",
+                        contentType: 'APPLICATION_JSON',
+                        requestBody: """
+                        {
+                            "appStack": "${env.APPSTACK_NAME}",
+                            "runStatus": "failed"
+                        }
+                        """
+                    )
+                } catch (Exception e) {
+                    echo "Failed to update drifts API: ${e.getMessage()}"
+                }
+            }
         }
         always {
             echo 'Cleaning up workspace...'
@@ -113,3 +173,4 @@ pipeline {
         }
     }
 }
+
