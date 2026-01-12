@@ -12,7 +12,7 @@ pipeline {
         AWS_DEFAULT_REGION = 'us-east-1'
         GIT_REPO = 'https://github.com/craigleander/deployment-repo.git'
         DRIFTS_API_URL = 'http://stackgen.34.170.32.248.nip.io/platform/drifts'
-        APPSTACK_NAME = 'Cluster-Deployment-IoT'
+        APPSTACK_NAME = 'Cluster-Deployment-FSS'
     }
     
     stages {
